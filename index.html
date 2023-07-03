@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html class="bg-black">
+
+<head>
+    <title>SSH Terminal</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com/3.3.2"></script>
+</head>
+
+<body>
+    <div id="shell" class="shell"></div>
+
+    <script type="module">
+        import { JsShell } from './jsShell.js';
+
+        var selectedColor = "";
+
+        const commands = {
+            cls: {
+                handler: (shell) => {
+                    shell.clear();
+                },
+                description: 'Clear console.'
+            },
+            clear: {
+                handler: (shell) => {
+                    shell.clear();
+                },
+                description: 'Clear console.'
+            }
+        };
+
+        function makePS1(c) {
+            return `<strong class="text-${selectedColor}">\n${c} </strong>`;
+        }
+
+        async function startShell(shell, FirstPrint = "Terminal, Connected to SSH Server") {
+            shell
+                .clear()
+                .print(FirstPrint)
+
+            let input = '';
+            while (input !== 'exit') {
+                input = await shell.input();
+                input = input.trim();
+                if (!input.length) {
+                    co
+                    continue;
+                }
+                const argv = input.split(' ');
+
+                if (argv[0] === "cls" || argv[0] === "clear") {
+                    await commands[argv[0]].handler(shell, argv);
+                } else {
+                    let args_ = argv.slice(1).join(' ');
+
+                    if (args_ === "") {
+                        args_ = "";
+                    }
+
+                    await sendCommand(argv[0] + " " + args_);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const hostname = urlParams.get('hostname') || '';
+        const username = urlParams.get('username') || '';
+        const password = urlParams.get('password') || '';
+
+        const socket = new WebSocket(`ws://${window.location.hostname}:3000/?hostname=${hostname}&username=${username}&password=${password}`);
+
+
+        document.getElementById("shell").innerHTML = "<div class=\"p-10\"><span class=\"text-white\">Connecting...</span></div>"
+
+        function sendCommand(command) {
+            socket.send(command);
+        }
+
+        socket.onopen = function (event) {
+            if (socket.readyState === WebSocket.OPEN) {
+                console.log("Connected to WebSocket server.");
+            }
+
+            var shell1 = new JsShell('shell', {
+                width: '100%',
+                height: '100vh',
+                textSize: '0.9rem',
+                backgroundColor: '#000000',
+                promptPS: makePS1(`${username}@${hostname}:~#`)
+            });
+
+            socket.onmessage = function (event) {
+                const output = event.data;
+                if (output === "startup") {
+                    setTimeout(() => {
+                        startShell(shell1, `Connected to SSH Server - ${hostname}\nWelcome back ${username}`);
+                    }, 2500);
+                    return;
+                } else if (output.includes("XluJPYMRfHh97e96NPNirnccNiCHDSCBSeakKNGT2p30dtzojU")) {
+                    const error = output.split("XluJPYMRfHh97e96NPNirnccNiCHDSCBSeakKNGT2p30dtzojU: ")[1];
+                    shell1.print(`<span class="text-red-500">${error}</span>`);
+                }
+                shell1.print(output);
+            };
+        };
+
+        socket.onerror = function (event) {
+            if (event.type === "error") {
+                let shell = document.getElementById("shell");
+                shell.innerHTML = `<div class="grid mt-[25%] place-items-center font-bold text-red-500"><span>Unhandled Socket Error</span><span class="text-white">Make sure your credentials are right!</span></div>`;
+            }
+        };
+    </script>
+</body>
+
+</html>
